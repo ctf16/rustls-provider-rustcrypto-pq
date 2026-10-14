@@ -36,7 +36,11 @@ impl Hybrid {
     }
 
     fn join(&self, classical: &[u8], pq: &[u8]) -> Vec<u8> {
-        let (a, b) = if self.pq_first { (pq, classical) } else { (classical, pq) };
+        let (a, b) = if self.pq_first {
+            (pq, classical)
+        } else {
+            (classical, pq)
+        };
         let mut v = Vec::with_capacity(a.len() + b.len());
         v.extend_from_slice(a);
         v.extend_from_slice(b);
@@ -49,7 +53,12 @@ impl SupportedKxGroup for Hybrid {
         let classical = self.classical.start()?;
         let pq = self.pq.start()?;
         let pub_key = self.join(classical.pub_key(), pq.pub_key());
-        Ok(Box::new(Active { group: *self, classical, pq, pub_key }))
+        Ok(Box::new(Active {
+            group: *self,
+            classical,
+            pq,
+            pub_key,
+        }))
     }
 
     fn start_and_complete(&self, client_share: &[u8]) -> Result<CompletedKeyExchange, Error> {
@@ -86,7 +95,9 @@ impl ActiveKeyExchange for Active {
         let (c, q) = self.group.split(server_share, self.group.pq_server_len)?;
         let classical = self.classical.complete(c)?;
         let pq = self.pq.complete(q)?;
-        Ok(SharedSecret::from(self.group.join(classical.secret_bytes(), pq.secret_bytes())))
+        Ok(SharedSecret::from(
+            self.group.join(classical.secret_bytes(), pq.secret_bytes()),
+        ))
     }
 
     fn pub_key(&self) -> &[u8] {

@@ -11,17 +11,20 @@
 use std::io::{Read, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use rustls::crypto::{aws_lc_rs, CryptoProvider, SupportedKxGroup};
 use rustls::pki_types::pem::PemObject;
-use rustls::pki_types::{CertificateDer, InvalidSignature, PrivateKeyDer, ServerName, SubjectPublicKeyInfoDer};
+use rustls::pki_types::{
+    CertificateDer, InvalidSignature, PrivateKeyDer, ServerName, SubjectPublicKeyInfoDer,
+};
 use rustls::server::WebPkiClientVerifier;
 use rustls::version::{TLS12, TLS13};
 use rustls::{
-    ClientConfig, ClientConnection, Connection, Error, HandshakeKind, NamedGroup, RootCertStore, ServerConfig,
-    ServerConnection, SignatureScheme, SupportedCipherSuite, SupportedProtocolVersion,
+    ClientConfig, ClientConnection, Connection, Error, HandshakeKind, NamedGroup, RootCertStore,
+    ServerConfig, ServerConnection, SignatureScheme, SupportedCipherSuite,
+    SupportedProtocolVersion,
 };
 
 use crate::hybrid::Hybrid;
@@ -34,8 +37,14 @@ static TESTDATA: LazyLock<PathBuf> = LazyLock::new(|| {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
     // (the last file make.sh writes)
     if !dir.join("rsa1024.spki.pem").exists() {
-        let ok = std::process::Command::new("sh").arg(dir.join("make.sh")).status().is_ok_and(|s| s.success());
-        assert!(ok, "testdata/make.sh failed: it needs OpenSSL 3.5 or later (OPENSSL=/path/to/openssl)");
+        let ok = std::process::Command::new("sh")
+            .arg(dir.join("make.sh"))
+            .status()
+            .is_ok_and(|s| s.success());
+        assert!(
+            ok,
+            "testdata/make.sh failed: it needs OpenSSL 3.5 or later (OPENSSL=/path/to/openssl)"
+        );
     }
     dir
 });
@@ -50,15 +59,22 @@ pub fn key(name: &str) -> PrivateKeyDer<'static> {
 }
 
 pub fn certs(name: &str) -> Vec<CertificateDer<'static>> {
-    CertificateDer::pem_slice_iter(&data(name)).collect::<Result<_, _>>().unwrap()
+    CertificateDer::pem_slice_iter(&data(name))
+        .collect::<Result<_, _>>()
+        .unwrap()
 }
 
 pub fn spki(name: &str) -> Vec<u8> {
-    SubjectPublicKeyInfoDer::from_pem_slice(&data(name)).unwrap().as_ref().to_vec()
+    SubjectPublicKeyInfoDer::from_pem_slice(&data(name))
+        .unwrap()
+        .as_ref()
+        .to_vec()
 }
 
 /// the key types in testdata, each with a CA, a leaf and its key
-pub const KEY_TYPES: [&str; 7] = ["p256", "p384", "ed25519", "rsa2048", "mldsa44", "mldsa65", "mldsa87"];
+pub const KEY_TYPES: [&str; 7] = [
+    "p256", "p384", "ed25519", "rsa2048", "mldsa44", "mldsa65", "mldsa87",
+];
 
 /// the signature schemes a key of type KT signs with
 pub fn schemes(kt: &str) -> &'static [SignatureScheme] {
@@ -67,7 +83,14 @@ pub fn schemes(kt: &str) -> &'static [SignatureScheme] {
         "p256" => &[ECDSA_NISTP256_SHA256],
         "p384" => &[ECDSA_NISTP384_SHA384],
         "ed25519" => &[ED25519],
-        "rsa2048" | "rsa1024" => &[RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512, RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512],
+        "rsa2048" | "rsa1024" => &[
+            RSA_PSS_SHA256,
+            RSA_PSS_SHA384,
+            RSA_PSS_SHA512,
+            RSA_PKCS1_SHA256,
+            RSA_PKCS1_SHA384,
+            RSA_PKCS1_SHA512,
+        ],
         "mldsa44" => &[ML_DSA_44],
         "mldsa65" => &[ML_DSA_65],
         "mldsa87" => &[ML_DSA_87],
@@ -80,8 +103,15 @@ pub fn key_types(p: &CryptoProvider) -> Vec<&'static str> {
     KEY_TYPES
         .into_iter()
         .filter(|kt| {
-            p.key_provider.load_private_key(key(&format!("{kt}.key"))).is_ok()
-                && schemes(kt).iter().all(|s| p.signature_verification_algorithms.mapping.iter().any(|(m, _)| m == s))
+            p.key_provider
+                .load_private_key(key(&format!("{kt}.key")))
+                .is_ok()
+                && schemes(kt).iter().all(|s| {
+                    p.signature_verification_algorithms
+                        .mapping
+                        .iter()
+                        .any(|(m, _)| m == s)
+                })
         })
         .collect()
 }
@@ -122,7 +152,10 @@ impl Prng {
 
 /// rounds of the random-input checks: PQC_TEST_ITERATIONS, default 200
 pub fn iterations() -> usize {
-    std::env::var("PQC_TEST_ITERATIONS").ok().and_then(|v| v.parse().ok()).unwrap_or(200)
+    std::env::var("PQC_TEST_ITERATIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(200)
 }
 
 fn hex(b: &[u8]) -> String {
@@ -130,7 +163,10 @@ fn hex(b: &[u8]) -> String {
 }
 
 fn unhex(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 // ---- key exchange ----
@@ -143,10 +179,18 @@ pub fn group(p: &CryptoProvider, name: NamedGroup) -> Option<&'static dyn Suppor
 pub fn assert_agree(client: &dyn SupportedKxGroup, server: &dyn SupportedKxGroup) {
     let name = client.name();
     let c = client.start().unwrap();
-    let s = server.start_and_complete(c.pub_key()).unwrap_or_else(|e| panic!("{name:?}: server: {e}"));
+    let s = server
+        .start_and_complete(c.pub_key())
+        .unwrap_or_else(|e| panic!("{name:?}: server: {e}"));
     assert_eq!(s.group, name);
-    let secret = c.complete(&s.pub_key).unwrap_or_else(|e| panic!("{name:?}: client: {e}"));
-    assert_eq!(hex(secret.secret_bytes()), hex(s.secret.secret_bytes()), "{name:?}: secrets differ");
+    let secret = c
+        .complete(&s.pub_key)
+        .unwrap_or_else(|e| panic!("{name:?}: client: {e}"));
+    assert_eq!(
+        hex(secret.secret_bytes()),
+        hex(s.secret.secret_bytes()),
+        "{name:?}: secrets differ"
+    );
 }
 
 /// every group of P agrees with itself, and with aws-lc-rs in both roles where
@@ -193,7 +237,12 @@ struct Layout {
 
 fn layout(name: NamedGroup) -> Layout {
     use NamedGroup::*;
-    let l = |classical, ek, ct, pq_first| Layout { classical, ek, ct, pq_first };
+    let l = |classical, ek, ct, pq_first| Layout {
+        classical,
+        ek,
+        ct,
+        pq_first,
+    };
     match name {
         X25519 => l(Some((X25519, 32)), 0, 0, false),
         secp256r1 => l(Some((secp256r1, 65)), 0, 0, false),
@@ -245,7 +294,10 @@ const X25519_SMALL_ORDER: [&str; 7] = [
 /// elliptic-curve shares to refuse, made from VALID (a valid share of GROUP)
 fn invalid_classical(group: NamedGroup, valid: &[u8]) -> Vec<(String, Vec<u8>)> {
     if group == NamedGroup::X25519 {
-        return X25519_SMALL_ORDER.iter().map(|h| (format!("small-order point {h}"), unhex(h))).collect();
+        return X25519_SMALL_ORDER
+            .iter()
+            .map(|h| (format!("small-order point {h}"), unhex(h)))
+            .collect();
     }
     let n = valid.len();
     let coord = (n - 1) / 2;
@@ -280,7 +332,10 @@ fn invalid_ek(valid: &[u8]) -> Vec<(String, Vec<u8>)> {
     let mut last = valid.to_vec();
     last[t - 1] = 0xff;
     last[t - 2] |= 0xf0;
-    vec![("first coefficient >= q".into(), first), ("last coefficient >= q".into(), last)]
+    vec![
+        ("first coefficient >= q".into(), first),
+        ("last coefficient >= q".into(), last),
+    ]
 }
 
 /// every group of P refuses, in both roles: shares of the wrong length,
@@ -295,10 +350,21 @@ pub fn malformed_shares_refused(p: &CryptoProvider) -> usize {
         let client = g.start().unwrap();
         let share = client.pub_key().to_vec();
         let server_share = g.start_and_complete(&share).unwrap().pub_key;
-        assert_eq!(share.len(), l.classical.map_or(0, |c| c.1) + l.ek, "{name:?}: client share length");
-        assert_eq!(server_share.len(), l.classical.map_or(0, |c| c.1) + l.ct, "{name:?}: server share length");
+        assert_eq!(
+            share.len(),
+            l.classical.map_or(0, |c| c.1) + l.ek,
+            "{name:?}: client share length"
+        );
+        assert_eq!(
+            server_share.len(),
+            l.classical.map_or(0, |c| c.1) + l.ct,
+            "{name:?}: server share length"
+        );
         let mut refuse_client = |what: &str, bad: &[u8]| {
-            assert!(g.start_and_complete(bad).is_err(), "{name:?}: accepted a client share: {what}");
+            assert!(
+                g.start_and_complete(bad).is_err(),
+                "{name:?}: accepted a client share: {what}"
+            );
             checked += 1;
         };
         for len in [0, 1, share.len() - 1, share.len() + 1, 2 * share.len()] {
@@ -316,7 +382,10 @@ pub fn malformed_shares_refused(p: &CryptoProvider) -> usize {
             }
         }
         let mut refuse_server = |what: &str, bad: &[u8]| {
-            assert!(g.start().unwrap().complete(bad).is_err(), "{name:?}: accepted a server share: {what}");
+            assert!(
+                g.start().unwrap().complete(bad).is_err(),
+                "{name:?}: accepted a server share: {what}"
+            );
             checked += 1;
         };
         for len in [0, 1, server_share.len() - 1, server_share.len() + 1] {
@@ -356,10 +425,25 @@ pub fn spki_parts(spki: &[u8]) -> (&[u8], &[u8]) {
 }
 
 /// verify as webpki would: the algorithm for SCHEME that takes this key's type
-pub fn verify(p: &CryptoProvider, scheme: SignatureScheme, spki: &[u8], msg: &[u8], sig: &[u8]) -> Result<(), InvalidSignature> {
+pub fn verify(
+    p: &CryptoProvider,
+    scheme: SignatureScheme,
+    spki: &[u8],
+    msg: &[u8],
+    sig: &[u8],
+) -> Result<(), InvalidSignature> {
     let (alg_id, key) = spki_parts(spki);
-    let algs = p.signature_verification_algorithms.mapping.iter().find(|(s, _)| *s == scheme).ok_or(InvalidSignature)?.1;
-    let alg = algs.iter().find(|a| a.public_key_alg_id().as_ref() == alg_id).ok_or(InvalidSignature)?;
+    let algs = p
+        .signature_verification_algorithms
+        .mapping
+        .iter()
+        .find(|(s, _)| *s == scheme)
+        .ok_or(InvalidSignature)?
+        .1;
+    let alg = algs
+        .iter()
+        .find(|a| a.public_key_alg_id().as_ref() == alg_id)
+        .ok_or(InvalidSignature)?;
     alg.verify_signature(key, msg, sig)
 }
 
@@ -376,39 +460,71 @@ pub fn signatures_agree(p: &CryptoProvider) -> Vec<&'static str> {
     let types = key_types(p);
     for &kt in &types {
         let spki = spki(&format!("{kt}.spki.pem"));
-        let mine = p.key_provider.load_private_key(key(&format!("{kt}.key"))).unwrap();
+        let mine = p
+            .key_provider
+            .load_private_key(key(&format!("{kt}.key")))
+            .unwrap();
         if let Some(pk) = mine.public_key() {
             assert_eq!(hex(pk.as_ref()), hex(&spki), "{kt}: SubjectPublicKeyInfo");
         }
-        let theirs = reference.key_provider.load_private_key(key(&format!("{kt}.key"))).unwrap();
+        let theirs = reference
+            .key_provider
+            .load_private_key(key(&format!("{kt}.key")))
+            .unwrap();
         for &scheme in schemes(kt) {
             for (who, signer) in [("provider", &mine), ("aws-lc-rs", &theirs)] {
-                let s = signer.choose_scheme(&[scheme]).unwrap_or_else(|| panic!("{who} {kt}: won't sign {scheme:?}"));
+                let s = signer
+                    .choose_scheme(&[scheme])
+                    .unwrap_or_else(|| panic!("{who} {kt}: won't sign {scheme:?}"));
                 assert_eq!(s.scheme(), scheme);
                 let sig = s.sign(msg).unwrap();
                 let ctx = format!("{kt} {scheme:?} signed by {who}");
-                verify(p, scheme, &spki, msg, &sig).unwrap_or_else(|_| panic!("{ctx}: provider refused it"));
-                verify(&reference, scheme, &spki, msg, &sig).unwrap_or_else(|_| panic!("{ctx}: aws-lc-rs refused it"));
-                assert!(verify(p, scheme, &spki, &altered, &sig).is_err(), "{ctx}: verified an altered message");
+                verify(p, scheme, &spki, msg, &sig)
+                    .unwrap_or_else(|_| panic!("{ctx}: provider refused it"));
+                verify(&reference, scheme, &spki, msg, &sig)
+                    .unwrap_or_else(|_| panic!("{ctx}: aws-lc-rs refused it"));
+                assert!(
+                    verify(p, scheme, &spki, &altered, &sig).is_err(),
+                    "{ctx}: verified an altered message"
+                );
                 for i in [0, 1, sig.len() / 2, sig.len() - 1] {
                     let mut bad = sig.clone();
                     bad[i] ^= 0x10;
-                    assert!(verify(p, scheme, &spki, msg, &bad).is_err(), "{ctx}: verified with byte {i} altered");
+                    assert!(
+                        verify(p, scheme, &spki, msg, &bad).is_err(),
+                        "{ctx}: verified with byte {i} altered"
+                    );
                 }
-                assert!(verify(p, scheme, &spki, msg, &sig[..sig.len() - 1]).is_err(), "{ctx}: verified truncated");
-                assert!(verify(p, scheme, &spki, msg, &[&sig[..], &[0]].concat()).is_err(), "{ctx}: verified extended");
+                assert!(
+                    verify(p, scheme, &spki, msg, &sig[..sig.len() - 1]).is_err(),
+                    "{ctx}: verified truncated"
+                );
+                assert!(
+                    verify(p, scheme, &spki, msg, &[&sig[..], &[0]].concat()).is_err(),
+                    "{ctx}: verified extended"
+                );
             }
         }
         // a key of another type doesn't sign this type's schemes
         let other = if kt == "p256" { "p384" } else { "p256" };
-        assert!(mine.choose_scheme(schemes(other)).is_none(), "{kt}: signs {other}'s schemes");
+        assert!(
+            mine.choose_scheme(schemes(other)).is_none(),
+            "{kt}: signs {other}'s schemes"
+        );
     }
     if let Ok(small) = p.key_provider.load_private_key(key("rsa1024.key")) {
         let spki = spki("rsa1024.spki.pem");
         // (PSS with SHA-384 or SHA-512 doesn't fit a 1024-bit modulus at all)
-        for scheme in [SignatureScheme::RSA_PSS_SHA256, SignatureScheme::RSA_PKCS1_SHA256, SignatureScheme::RSA_PKCS1_SHA512] {
+        for scheme in [
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA512,
+        ] {
             let sig = small.choose_scheme(&[scheme]).unwrap().sign(msg).unwrap();
-            assert!(verify(p, scheme, &spki, msg, &sig).is_err(), "RSA-1024 {scheme:?} verified");
+            assert!(
+                verify(p, scheme, &spki, msg, &sig).is_err(),
+                "RSA-1024 {scheme:?} verified"
+            );
         }
     }
     types
@@ -425,21 +541,39 @@ pub fn primitives_agree(p: &CryptoProvider) -> Vec<rustls::CipherSuite> {
     let mut rng = Prng(0x6b64);
     let mut compared = Vec::new();
     for suite in &p.cipher_suites {
-        let theirs = reference.cipher_suites.iter().find(|s| s.suite() == suite.suite());
+        let theirs = reference
+            .cipher_suites
+            .iter()
+            .find(|s| s.suite() == suite.suite());
         let theirs = theirs.unwrap_or_else(|| panic!("aws-lc-rs has no {:?}", suite.suite()));
         match (suite, theirs) {
             (SupportedCipherSuite::Tls13(a), SupportedCipherSuite::Tls13(b)) => {
                 let (ha, hb) = (a.common.hash_provider, b.common.hash_provider);
-                for len in [0, 1, 55, 56, 63, 64, 65, 111, 112, 127, 128, 129, 1000, 70_000] {
+                for len in [
+                    0, 1, 55, 56, 63, 64, 65, 111, 112, 127, 128, 129, 1000, 70_000,
+                ] {
                     let data = rng.bytes(len);
-                    assert_eq!(hex(ha.hash(&data).as_ref()), hex(hb.hash(&data).as_ref()), "{:?} hash of {len}", suite.suite());
+                    assert_eq!(
+                        hex(ha.hash(&data).as_ref()),
+                        hex(hb.hash(&data).as_ref()),
+                        "{:?} hash of {len}",
+                        suite.suite()
+                    );
                     let (mut ca, mut cb) = (ha.start(), hb.start());
                     ca.update(&data[..len / 3]);
                     cb.update(&data[..len / 3]);
-                    assert_eq!(hex(ca.fork_finish().as_ref()), hex(cb.fork_finish().as_ref()));
+                    assert_eq!(
+                        hex(ca.fork_finish().as_ref()),
+                        hex(cb.fork_finish().as_ref())
+                    );
                     ca.update(&data[len / 3..]);
                     cb.update(&data[len / 3..]);
-                    assert_eq!(hex(ca.finish().as_ref()), hex(cb.finish().as_ref()), "{:?} incremental hash", suite.suite());
+                    assert_eq!(
+                        hex(ca.finish().as_ref()),
+                        hex(cb.finish().as_ref()),
+                        "{:?} incremental hash",
+                        suite.suite()
+                    );
                 }
                 let (ka, kb) = (a.hkdf_provider, b.hkdf_provider);
                 let hash_len = ha.output_len();
@@ -450,29 +584,60 @@ pub fn primitives_agree(p: &CryptoProvider) -> Vec<rustls::CipherSuite> {
                     let info = rng.some_bytes(60);
                     let salt = (round % 4 != 0).then_some(&salt[..]);
                     let (ea, eb) = if round % 8 == 1 {
-                        (ka.extract_from_zero_ikm(salt), kb.extract_from_zero_ikm(salt))
+                        (
+                            ka.extract_from_zero_ikm(salt),
+                            kb.extract_from_zero_ikm(salt),
+                        )
                     } else {
-                        (ka.extract_from_secret(salt, &ikm), kb.extract_from_secret(salt, &ikm))
+                        (
+                            ka.extract_from_secret(salt, &ikm),
+                            kb.extract_from_secret(salt, &ikm),
+                        )
                     };
-                    let (oa, ob) = (ea.expand_block(&[&info, b"x"]), eb.expand_block(&[&info, b"x"]));
-                    assert_eq!(hex(oa.as_ref()), hex(ob.as_ref()), "{:?} HKDF expand_block", suite.suite());
+                    let (oa, ob) = (
+                        ea.expand_block(&[&info, b"x"]),
+                        eb.expand_block(&[&info, b"x"]),
+                    );
+                    assert_eq!(
+                        hex(oa.as_ref()),
+                        hex(ob.as_ref()),
+                        "{:?} HKDF expand_block",
+                        suite.suite()
+                    );
                     let len = [1, hash_len - 1, hash_len, hash_len + 1, 255 * hash_len][round % 5];
                     let (mut sa, mut sb) = (vec![0; len], vec![0; len]);
                     ea.expand_slice(&[&info], &mut sa).unwrap();
                     eb.expand_slice(&[&info], &mut sb).unwrap();
-                    assert_eq!(hex(&sa), hex(&sb), "{:?} HKDF expand to {len}", suite.suite());
-                    assert!(ea.expand_slice(&[&info], &mut vec![0; 255 * hash_len + 1]).is_err(), "expand past 255 blocks");
+                    assert_eq!(
+                        hex(&sa),
+                        hex(&sb),
+                        "{:?} HKDF expand to {len}",
+                        suite.suite()
+                    );
+                    assert!(
+                        ea.expand_slice(&[&info], &mut vec![0; 255 * hash_len + 1])
+                            .is_err(),
+                        "expand past 255 blocks"
+                    );
                     let msg = rng.some_bytes(500);
-                    assert_eq!(hex(ka.hmac_sign(&oa, &msg).as_ref()), hex(kb.hmac_sign(&ob, &msg).as_ref()), "HMAC");
+                    assert_eq!(
+                        hex(ka.hmac_sign(&oa, &msg).as_ref()),
+                        hex(kb.hmac_sign(&ob, &msg).as_ref()),
+                        "HMAC"
+                    );
                     let (xa, xb) = (ka.expander_for_okm(&oa), kb.expander_for_okm(&ob));
-                    assert_eq!(hex(xa.expand_block(&[&info]).as_ref()), hex(xb.expand_block(&[&info]).as_ref()));
+                    assert_eq!(
+                        hex(xa.expand_block(&[&info]).as_ref()),
+                        hex(xb.expand_block(&[&info]).as_ref())
+                    );
                 }
             }
             (SupportedCipherSuite::Tls12(a), SupportedCipherSuite::Tls12(b)) => {
                 for _ in 0..64 {
                     // (never empty in TLS; aws-lc refuses empty inputs)
                     let lens = [1 + rng.below(300), 1 + rng.below(30), 1 + rng.below(80)];
-                    let (secret, label, seed) = (rng.bytes(lens[0]), rng.bytes(lens[1]), rng.bytes(lens[2]));
+                    let (secret, label, seed) =
+                        (rng.bytes(lens[0]), rng.bytes(lens[1]), rng.bytes(lens[2]));
                     let len = 1 + rng.below(300);
                     let (mut oa, mut ob) = (vec![0; len], vec![0; len]);
                     a.prf_provider.for_secret(&mut oa, &secret, &label, &seed);
@@ -489,7 +654,11 @@ pub fn primitives_agree(p: &CryptoProvider) -> Vec<rustls::CipherSuite> {
 
 // ---- handshakes in memory ----
 
-pub fn with(p: &CryptoProvider, suites: Vec<SupportedCipherSuite>, groups: Vec<&'static dyn SupportedKxGroup>) -> Arc<CryptoProvider> {
+pub fn with(
+    p: &CryptoProvider,
+    suites: Vec<SupportedCipherSuite>,
+    groups: Vec<&'static dyn SupportedKxGroup>,
+) -> Arc<CryptoProvider> {
     let mut p = p.clone();
     p.cipher_suites = suites;
     p.kx_groups = groups;
@@ -503,7 +672,11 @@ fn roots(kt: &str) -> RootCertStore {
 }
 
 /// a client that verifies KT's CA and authenticates with KT's leaf
-pub fn client_config(p: Arc<CryptoProvider>, version: &'static SupportedProtocolVersion, kt: &str) -> Arc<ClientConfig> {
+pub fn client_config(
+    p: Arc<CryptoProvider>,
+    version: &'static SupportedProtocolVersion,
+    kt: &str,
+) -> Arc<ClientConfig> {
     Arc::new(
         ClientConfig::builder_with_provider(p)
             .with_protocol_versions(&[version])
@@ -515,8 +688,14 @@ pub fn client_config(p: Arc<CryptoProvider>, version: &'static SupportedProtocol
 }
 
 /// a server with KT's leaf that requires a client certificate from KT's CA
-pub fn server_config(p: Arc<CryptoProvider>, version: &'static SupportedProtocolVersion, kt: &str) -> Arc<ServerConfig> {
-    let verifier = WebPkiClientVerifier::builder_with_provider(Arc::new(roots(kt)), p.clone()).build().unwrap();
+pub fn server_config(
+    p: Arc<CryptoProvider>,
+    version: &'static SupportedProtocolVersion,
+    kt: &str,
+) -> Arc<ServerConfig> {
+    let verifier = WebPkiClientVerifier::builder_with_provider(Arc::new(roots(kt)), p.clone())
+        .build()
+        .unwrap();
     Arc::new(
         ServerConfig::builder_with_provider(p)
             .with_protocol_versions(&[version])
@@ -551,8 +730,14 @@ pub fn transfer(from: &mut Connection, to: &mut Connection) -> Result<(), Error>
 }
 
 /// a completed handshake (and the server's session tickets delivered)
-pub fn connect(client: &Arc<ClientConfig>, server: &Arc<ServerConfig>) -> Result<(Connection, Connection), Error> {
-    let mut c = Connection::Client(ClientConnection::new(client.clone(), ServerName::try_from("localhost").unwrap())?);
+pub fn connect(
+    client: &Arc<ClientConfig>,
+    server: &Arc<ServerConfig>,
+) -> Result<(Connection, Connection), Error> {
+    let mut c = Connection::Client(ClientConnection::new(
+        client.clone(),
+        ServerName::try_from("localhost").unwrap(),
+    )?);
     let mut s = Connection::Server(ServerConnection::new(server.clone())?);
     for _ in 0..8 {
         transfer(&mut c, &mut s)?;
@@ -580,14 +765,25 @@ pub fn check_connection(c: &mut Connection, s: &mut Connection, len: usize, rng:
     send(c, s, &rng.bytes(len));
     send(s, c, &rng.bytes(len));
     let label = b"EXPERIMENTAL pqc-bench";
-    let ec = c.export_keying_material([0u8; 48], label, Some(b"ctx")).unwrap();
-    let es = s.export_keying_material([0u8; 48], label, Some(b"ctx")).unwrap();
+    let ec = c
+        .export_keying_material([0u8; 48], label, Some(b"ctx"))
+        .unwrap();
+    let es = s
+        .export_keying_material([0u8; 48], label, Some(b"ctx"))
+        .unwrap();
     assert_eq!(ec, es, "exported keying material differs");
 }
 
 /// (client, server) pairs: P with itself and with aws-lc-rs both ways
-fn pairs<'a>(p: &'a CryptoProvider, reference: &'a CryptoProvider) -> [(&'static str, &'a CryptoProvider, &'a CryptoProvider); 3] {
-    [("P -> P", p, p), ("P -> aws-lc-rs", p, reference), ("aws-lc-rs -> P", reference, p)]
+fn pairs<'a>(
+    p: &'a CryptoProvider,
+    reference: &'a CryptoProvider,
+) -> [(&'static str, &'a CryptoProvider, &'a CryptoProvider); 3] {
+    [
+        ("P -> P", p, p),
+        ("P -> aws-lc-rs", p, reference),
+        ("aws-lc-rs -> P", reference, p),
+    ]
 }
 
 /// a suite usable with a key of type KT (TLS 1.2 suites name the signature algorithm)
@@ -599,18 +795,32 @@ fn suite_fits(suite: &SupportedCipherSuite, kt: &str) -> bool {
 }
 
 /// CLIENT's suites (TLS VERSION, for KT) that SERVER has too, for KT as well
-fn common_suites(client: &CryptoProvider, server: &CryptoProvider, version: &SupportedProtocolVersion, kt: &str) -> Vec<SupportedCipherSuite> {
+fn common_suites(
+    client: &CryptoProvider,
+    server: &CryptoProvider,
+    version: &SupportedProtocolVersion,
+    kt: &str,
+) -> Vec<SupportedCipherSuite> {
     client
         .cipher_suites
         .iter()
         .copied()
         .filter(|s| s.version().version == version.version && suite_fits(s, kt))
-        .filter(|s| server.cipher_suites.iter().any(|t| t.suite() == s.suite() && suite_fits(t, kt)))
+        .filter(|s| {
+            server
+                .cipher_suites
+                .iter()
+                .any(|t| t.suite() == s.suite() && suite_fits(t, kt))
+        })
         .collect()
 }
 
 /// CLIENT's groups usable in VERSION that SERVER has too
-fn common_groups(client: &CryptoProvider, server: &CryptoProvider, version: &SupportedProtocolVersion) -> Vec<&'static dyn SupportedKxGroup> {
+fn common_groups(
+    client: &CryptoProvider,
+    server: &CryptoProvider,
+    version: &SupportedProtocolVersion,
+) -> Vec<&'static dyn SupportedKxGroup> {
     client
         .kx_groups
         .iter()
@@ -621,7 +831,11 @@ fn common_groups(client: &CryptoProvider, server: &CryptoProvider, version: &Sup
 }
 
 fn version_name(v: &SupportedProtocolVersion) -> &'static str {
-    if v.version == TLS13.version { "TLS 1.3" } else { "TLS 1.2" }
+    if v.version == TLS13.version {
+        "TLS 1.3"
+    } else {
+        "TLS 1.2"
+    }
 }
 
 /// mutual-TLS handshakes, P with itself and with aws-lc-rs both ways, for
@@ -633,19 +847,36 @@ pub fn handshake_matrix(p: &CryptoProvider) -> usize {
     let mut rng = Prng(0x6873);
     let mut count = 0;
     for (pair, cp, sp) in pairs(p, &reference) {
-        let kts: Vec<_> = key_types(cp).into_iter().filter(|kt| key_types(sp).contains(kt)).collect();
+        let kts: Vec<_> = key_types(cp)
+            .into_iter()
+            .filter(|kt| key_types(sp).contains(kt))
+            .collect();
         for version in [&TLS13, &TLS12] {
             for &kt in &kts {
                 let server = server_config(Arc::new(sp.clone()), version, kt);
                 for suite in common_suites(cp, sp, version, kt) {
                     for g in common_groups(cp, sp, version) {
-                        let what = format!("{pair} {} {kt} {:?} {:?}", version_name(version), suite.suite(), g.name());
+                        let what = format!(
+                            "{pair} {} {kt} {:?} {:?}",
+                            version_name(version),
+                            suite.suite(),
+                            g.name()
+                        );
                         let client = client_config(with(cp, vec![suite], vec![g]), version, kt);
-                        let (mut c, mut s) = connect(&client, &server).unwrap_or_else(|e| panic!("{what}: {e}"));
+                        let (mut c, mut s) =
+                            connect(&client, &server).unwrap_or_else(|e| panic!("{what}: {e}"));
                         for conn in [&c, &s] {
                             assert_eq!(conn.protocol_version(), Some(version.version), "{what}");
-                            assert_eq!(conn.negotiated_cipher_suite().map(|s| s.suite()), Some(suite.suite()), "{what}");
-                            assert_eq!(conn.negotiated_key_exchange_group().map(|g| g.name()), Some(g.name()), "{what}");
+                            assert_eq!(
+                                conn.negotiated_cipher_suite().map(|s| s.suite()),
+                                Some(suite.suite()),
+                                "{what}"
+                            );
+                            assert_eq!(
+                                conn.negotiated_key_exchange_group().map(|g| g.name()),
+                                Some(g.name()),
+                                "{what}"
+                            );
                             assert_eq!(conn.handshake_kind(), Some(HandshakeKind::Full), "{what}");
                         }
                         check_connection(&mut c, &mut s, 3000, &mut rng);
@@ -674,13 +905,34 @@ pub fn hello_retry_matrix(p: &CryptoProvider) -> usize {
                 .find(|&n| n != g.name())
                 .and_then(|n| group(cp, n))
                 .unwrap();
-            let what = format!("{pair} HelloRetryRequest {:?} -> {:?}", first.name(), g.name());
+            let what = format!(
+                "{pair} HelloRetryRequest {:?} -> {:?}",
+                first.name(),
+                g.name()
+            );
             let client = client_config(with(cp, vec![suite], vec![first, g]), &TLS13, "p256");
-            let server = server_config(with(sp, sp.cipher_suites.clone(), vec![group(sp, g.name()).unwrap()]), &TLS13, "p256");
-            let (mut c, mut s) = connect(&client, &server).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let server = server_config(
+                with(
+                    sp,
+                    sp.cipher_suites.clone(),
+                    vec![group(sp, g.name()).unwrap()],
+                ),
+                &TLS13,
+                "p256",
+            );
+            let (mut c, mut s) =
+                connect(&client, &server).unwrap_or_else(|e| panic!("{what}: {e}"));
             for conn in [&c, &s] {
-                assert_eq!(conn.handshake_kind(), Some(HandshakeKind::FullWithHelloRetryRequest), "{what}");
-                assert_eq!(conn.negotiated_key_exchange_group().map(|g| g.name()), Some(g.name()), "{what}");
+                assert_eq!(
+                    conn.handshake_kind(),
+                    Some(HandshakeKind::FullWithHelloRetryRequest),
+                    "{what}"
+                );
+                assert_eq!(
+                    conn.negotiated_key_exchange_group().map(|g| g.name()),
+                    Some(g.name()),
+                    "{what}"
+                );
             }
             check_connection(&mut c, &mut s, 100, &mut rng);
             count += 1;
@@ -701,11 +953,17 @@ pub fn resumption(p: &CryptoProvider) -> usize {
                 let server = server_config(Arc::new(sp.clone()), version, kt);
                 for suite in common_suites(cp, sp, version, kt) {
                     let what = format!("{pair} {} {kt} {:?}", version_name(version), suite.suite());
-                    let client = client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
+                    let client =
+                        client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
                     connect(&client, &server).unwrap_or_else(|e| panic!("{what}: {e}"));
-                    let (mut c, mut s) = connect(&client, &server).unwrap_or_else(|e| panic!("{what}: resuming: {e}"));
+                    let (mut c, mut s) = connect(&client, &server)
+                        .unwrap_or_else(|e| panic!("{what}: resuming: {e}"));
                     for conn in [&c, &s] {
-                        assert_eq!(conn.handshake_kind(), Some(HandshakeKind::Resumed), "{what}");
+                        assert_eq!(
+                            conn.handshake_kind(),
+                            Some(HandshakeKind::Resumed),
+                            "{what}"
+                        );
                     }
                     check_connection(&mut c, &mut s, 1000, &mut rng);
                     count += 1;
@@ -727,7 +985,8 @@ pub fn bulk_and_key_updates(p: &CryptoProvider) -> usize {
             let kt = "p256";
             let server = server_config(Arc::new(sp.clone()), version, kt);
             for suite in common_suites(cp, sp, version, kt) {
-                let client = client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
+                let client =
+                    client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
                 let (mut c, mut s) = connect(&client, &server).unwrap();
                 for round in 0..3 {
                     if version.version == TLS13.version && round > 0 {
@@ -765,7 +1024,8 @@ pub fn tampered_records_refused(p: &CryptoProvider) -> usize {
                         continue; // TLS 1.3 records don't depend on the certificate
                     }
                     let what = format!("{pair} {} {:?}", version_name(version), suite.suite());
-                    let client = client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
+                    let client =
+                        client_config(with(cp, vec![suite], cp.kx_groups.clone()), version, kt);
                     let fresh = || {
                         let (mut c, s) = connect(&client, &server).unwrap();
                         c.writer().write_all(&[0x55; 40]).unwrap();
@@ -781,23 +1041,38 @@ pub fn tampered_records_refused(p: &CryptoProvider) -> usize {
                         let result = deliver(&mut s, &record);
                         let mut buf = [0u8; 64];
                         if let Ok(n) = s.reader().read(&mut buf) {
-                            assert!(buf[..n].iter().all(|&b| b == 0x55), "{what}: other plaintext with byte {i} altered");
+                            assert!(
+                                buf[..n].iter().all(|&b| b == 0x55),
+                                "{what}: other plaintext with byte {i} altered"
+                            );
                         }
                         if i >= 5 {
-                            assert!(result.is_err(), "{what}: accepted a record with byte {i} altered");
+                            assert!(
+                                result.is_err(),
+                                "{what}: accepted a record with byte {i} altered"
+                            );
                         }
                         refused += 1;
                     }
                     let (mut s, first, _) = fresh();
                     deliver(&mut s, &first).unwrap();
-                    assert!(deliver(&mut s, &first).is_err(), "{what}: accepted a replayed record");
+                    assert!(
+                        deliver(&mut s, &first).is_err(),
+                        "{what}: accepted a replayed record"
+                    );
                     let (mut s, _, second) = fresh();
-                    assert!(deliver(&mut s, &second).is_err(), "{what}: accepted records out of order");
+                    assert!(
+                        deliver(&mut s, &second).is_err(),
+                        "{what}: accepted records out of order"
+                    );
                     let (mut s, mut cut, _) = fresh();
                     cut.pop();
                     let len = u16::from_be_bytes([cut[3], cut[4]]) - 1;
                     cut[3..5].copy_from_slice(&len.to_be_bytes());
-                    assert!(deliver(&mut s, &cut).is_err(), "{what}: accepted a truncated record");
+                    assert!(
+                        deliver(&mut s, &cut).is_err(),
+                        "{what}: accepted a truncated record"
+                    );
                     refused += 3;
                 }
             }
@@ -823,15 +1098,33 @@ pub fn random_inputs(p: &CryptoProvider) -> usize {
     for &g in &p.kx_groups {
         let name = g.name();
         let cl = g.start().unwrap().pub_key().len();
-        let sl = g.start_and_complete(g.start().unwrap().pub_key()).unwrap().pub_key.len();
+        let sl = g
+            .start_and_complete(g.start().unwrap().pub_key())
+            .unwrap()
+            .pub_key
+            .len();
         for i in 0..n {
-            let len = if i % 2 == 0 { cl } else { rng.below(2 * cl + 2) };
+            let len = if i % 2 == 0 {
+                cl
+            } else {
+                rng.below(2 * cl + 2)
+            };
             let share = rng.bytes(len);
-            no_panic(|| format!("{name:?} client share {}", hex(&share)), || g.start_and_complete(&share).is_ok());
-            let len = if i % 2 == 0 { sl } else { rng.below(2 * sl + 2) };
+            no_panic(
+                || format!("{name:?} client share {}", hex(&share)),
+                || g.start_and_complete(&share).is_ok(),
+            );
+            let len = if i % 2 == 0 {
+                sl
+            } else {
+                rng.below(2 * sl + 2)
+            };
             let share = rng.bytes(len);
             let active = g.start().unwrap();
-            no_panic(|| format!("{name:?} server share {}", hex(&share)), || active.complete(&share).is_ok());
+            no_panic(
+                || format!("{name:?} server share {}", hex(&share)),
+                || active.complete(&share).is_ok(),
+            );
             inputs += 2;
         }
     }
@@ -847,14 +1140,27 @@ pub fn random_inputs(p: &CryptoProvider) -> usize {
                 _ => rng.some_bytes(3000),
             };
             let sig = rng.some_bytes(5000);
-            let ok = no_panic(|| format!("{alg:?} key {} sig {}", hex(&key), hex(&sig)), || alg.verify_signature(&key, msg, &sig).is_ok());
+            let ok = no_panic(
+                || format!("{alg:?} key {} sig {}", hex(&key), hex(&sig)),
+                || alg.verify_signature(&key, msg, &sig).is_ok(),
+            );
             assert!(!ok, "{alg:?}: a random signature verified");
             inputs += 1;
         }
     }
     let files = [
-        "p256.key", "p256.sec1.key", "p384.key", "p384.sec1.key", "ed25519.key", "rsa2048.key", "rsa2048.pkcs1.key",
-        "mldsa44.key", "mldsa44.seed.key", "mldsa44.expanded.key", "mldsa65.key", "mldsa87.key",
+        "p256.key",
+        "p256.sec1.key",
+        "p384.key",
+        "p384.sec1.key",
+        "ed25519.key",
+        "rsa2048.key",
+        "rsa2048.pkcs1.key",
+        "mldsa44.key",
+        "mldsa44.seed.key",
+        "mldsa44.expanded.key",
+        "mldsa65.key",
+        "mldsa87.key",
     ];
     for file in files {
         let k = key(file);
@@ -872,7 +1178,10 @@ pub fn random_inputs(p: &CryptoProvider) -> usize {
                 PrivateKeyDer::Sec1(_) => PrivateKeyDer::Sec1(bad.clone().into()),
                 _ => PrivateKeyDer::Pkcs8(bad.clone().into()),
             };
-            no_panic(|| format!("{file} corrupted: {}", hex(&bad)), || p.key_provider.load_private_key(bad_key).is_ok());
+            no_panic(
+                || format!("{file} corrupted: {}", hex(&bad)),
+                || p.key_provider.load_private_key(bad_key).is_ok(),
+            );
             inputs += 1;
         }
     }

@@ -7,9 +7,10 @@ use std::marker::PhantomData;
 
 use aes_gcm::aead::{AeadInOut, KeyInit};
 use rustls::crypto::cipher::{
-    make_tls12_aad, make_tls13_aad, AeadKey, InboundOpaqueMessage, InboundPlainMessage, Iv, KeyBlockShape,
-    MessageDecrypter, MessageEncrypter, Nonce, OutboundOpaqueMessage, OutboundPlainMessage, PrefixedPayload,
-    Tls12AeadAlgorithm, Tls13AeadAlgorithm, UnsupportedOperationError, NONCE_LEN,
+    make_tls12_aad, make_tls13_aad, AeadKey, InboundOpaqueMessage, InboundPlainMessage, Iv,
+    KeyBlockShape, MessageDecrypter, MessageEncrypter, Nonce, OutboundOpaqueMessage,
+    OutboundPlainMessage, PrefixedPayload, Tls12AeadAlgorithm, Tls13AeadAlgorithm,
+    UnsupportedOperationError, NONCE_LEN,
 };
 use rustls::{ConnectionTrafficSecrets, ContentType, Error, ProtocolVersion};
 
@@ -57,7 +58,12 @@ impl<A: Cipher> Aead<A> {
 }
 
 /// encrypt BUF in place with NONCE and AAD; the tag to append
-fn seal<A: Cipher>(c: &A, nonce: &[u8; NONCE_LEN], aad: &[u8], buf: &mut [u8]) -> Result<[u8; TAG_LEN], Error> {
+fn seal<A: Cipher>(
+    c: &A,
+    nonce: &[u8; NONCE_LEN],
+    aad: &[u8],
+    buf: &mut [u8],
+) -> Result<[u8; TAG_LEN], Error> {
     let nonce = aes_gcm::aead::Nonce::<A>::try_from(&nonce[..]).map_err(|_| Error::EncryptError)?;
     let tag = c
         .encrypt_inout_detached(&nonce, aad, buf.into())
@@ -66,7 +72,13 @@ fn seal<A: Cipher>(c: &A, nonce: &[u8; NONCE_LEN], aad: &[u8], buf: &mut [u8]) -
 }
 
 /// decrypt BUF in place, checking TAG
-fn open<A: Cipher>(c: &A, nonce: &[u8; NONCE_LEN], aad: &[u8], buf: &mut [u8], tag: &[u8]) -> Result<(), Error> {
+fn open<A: Cipher>(
+    c: &A,
+    nonce: &[u8; NONCE_LEN],
+    aad: &[u8],
+    buf: &mut [u8],
+    tag: &[u8],
+) -> Result<(), Error> {
     let nonce = aes_gcm::aead::Nonce::<A>::try_from(&nonce[..]).map_err(|_| Error::DecryptError)?;
     let tag = aes_gcm::aead::Tag::<A>::try_from(tag).map_err(|_| Error::DecryptError)?;
     c.decrypt_inout_detached(&nonce, aad, buf.into(), &tag)
@@ -88,7 +100,11 @@ impl<A: Cipher> Tls13AeadAlgorithm for Aead<A> {
         Aead::key_len(self)
     }
 
-    fn extract_keys(&self, key: AeadKey, iv: Iv) -> Result<ConnectionTrafficSecrets, UnsupportedOperationError> {
+    fn extract_keys(
+        &self,
+        key: AeadKey,
+        iv: Iv,
+    ) -> Result<ConnectionTrafficSecrets, UnsupportedOperationError> {
         Ok(self.secrets(key, iv))
     }
 }
@@ -96,14 +112,27 @@ impl<A: Cipher> Tls13AeadAlgorithm for Aead<A> {
 struct Tls13Cipher<A>(A, Iv);
 
 impl<A: Cipher> MessageEncrypter for Tls13Cipher<A> {
-    fn encrypt(&mut self, msg: OutboundPlainMessage<'_>, seq: u64) -> Result<OutboundOpaqueMessage, Error> {
+    fn encrypt(
+        &mut self,
+        msg: OutboundPlainMessage<'_>,
+        seq: u64,
+    ) -> Result<OutboundOpaqueMessage, Error> {
         let total_len = self.encrypted_payload_len(msg.payload.len());
         let mut payload = PrefixedPayload::with_capacity(total_len);
         payload.extend_from_chunks(&msg.payload);
         payload.extend_from_slice(&msg.typ.to_array());
-        let tag = seal(&self.0, &Nonce::new(&self.1, seq).0, &make_tls13_aad(total_len), payload.as_mut())?;
+        let tag = seal(
+            &self.0,
+            &Nonce::new(&self.1, seq).0,
+            &make_tls13_aad(total_len),
+            payload.as_mut(),
+        )?;
         payload.extend_from_slice(&tag);
-        Ok(OutboundOpaqueMessage::new(ContentType::ApplicationData, ProtocolVersion::TLSv1_2, payload))
+        Ok(OutboundOpaqueMessage::new(
+            ContentType::ApplicationData,
+            ProtocolVersion::TLSv1_2,
+            payload,
+        ))
     }
 
     fn encrypted_payload_len(&self, payload_len: usize) -> usize {
@@ -112,7 +141,11 @@ impl<A: Cipher> MessageEncrypter for Tls13Cipher<A> {
 }
 
 impl<A: Cipher> MessageDecrypter for Tls13Cipher<A> {
-    fn decrypt<'a>(&mut self, mut msg: InboundOpaqueMessage<'a>, seq: u64) -> Result<InboundPlainMessage<'a>, Error> {
+    fn decrypt<'a>(
+        &mut self,
+        mut msg: InboundOpaqueMessage<'a>,
+        seq: u64,
+    ) -> Result<InboundPlainMessage<'a>, Error> {
         let payload = &mut msg.payload;
         if payload.len() < TAG_LEN {
             return Err(Error::DecryptError);
@@ -151,7 +184,11 @@ impl<A: Cipher> Tls12AeadAlgorithm for Aead<A> {
 
     fn key_block_shape(&self) -> KeyBlockShape {
         if self.0 == Kind::ChaCha20Poly1305 {
-            KeyBlockShape { enc_key_len: 32, fixed_iv_len: NONCE_LEN, explicit_nonce_len: 0 }
+            KeyBlockShape {
+                enc_key_len: 32,
+                fixed_iv_len: NONCE_LEN,
+                explicit_nonce_len: 0,
+            }
         } else {
             KeyBlockShape {
                 enc_key_len: Aead::key_len(self),
@@ -167,7 +204,11 @@ impl<A: Cipher> Tls12AeadAlgorithm for Aead<A> {
         iv: &[u8],
         explicit: &[u8],
     ) -> Result<ConnectionTrafficSecrets, UnsupportedOperationError> {
-        let iv = if self.0 == Kind::ChaCha20Poly1305 { Iv::copy(iv) } else { gcm_iv(iv, explicit) };
+        let iv = if self.0 == Kind::ChaCha20Poly1305 {
+            Iv::copy(iv)
+        } else {
+            gcm_iv(iv, explicit)
+        };
         Ok(self.secrets(key, iv))
     }
 }
@@ -183,8 +224,13 @@ fn gcm_iv(salt: &[u8], explicit: &[u8]) -> Iv {
 struct Tls12ChaCha<A>(A, Iv);
 
 impl<A: Cipher> MessageEncrypter for Tls12ChaCha<A> {
-    fn encrypt(&mut self, msg: OutboundPlainMessage<'_>, seq: u64) -> Result<OutboundOpaqueMessage, Error> {
-        let mut payload = PrefixedPayload::with_capacity(self.encrypted_payload_len(msg.payload.len()));
+    fn encrypt(
+        &mut self,
+        msg: OutboundPlainMessage<'_>,
+        seq: u64,
+    ) -> Result<OutboundOpaqueMessage, Error> {
+        let mut payload =
+            PrefixedPayload::with_capacity(self.encrypted_payload_len(msg.payload.len()));
         payload.extend_from_chunks(&msg.payload);
         let aad = make_tls12_aad(seq, msg.typ, msg.version, msg.payload.len());
         let tag = seal(&self.0, &Nonce::new(&self.1, seq).0, &aad, payload.as_mut())?;
@@ -198,7 +244,11 @@ impl<A: Cipher> MessageEncrypter for Tls12ChaCha<A> {
 }
 
 impl<A: Cipher> MessageDecrypter for Tls12ChaCha<A> {
-    fn decrypt<'a>(&mut self, mut msg: InboundOpaqueMessage<'a>, seq: u64) -> Result<InboundPlainMessage<'a>, Error> {
+    fn decrypt<'a>(
+        &mut self,
+        mut msg: InboundOpaqueMessage<'a>,
+        seq: u64,
+    ) -> Result<InboundPlainMessage<'a>, Error> {
         if msg.payload.len() < TAG_LEN {
             return Err(Error::DecryptError);
         }
@@ -215,13 +265,23 @@ impl<A: Cipher> MessageDecrypter for Tls12ChaCha<A> {
 struct Tls12Gcm<A>(A, Iv);
 
 impl<A: Cipher> MessageEncrypter for Tls12Gcm<A> {
-    fn encrypt(&mut self, msg: OutboundPlainMessage<'_>, seq: u64) -> Result<OutboundOpaqueMessage, Error> {
-        let mut payload = PrefixedPayload::with_capacity(self.encrypted_payload_len(msg.payload.len()));
+    fn encrypt(
+        &mut self,
+        msg: OutboundPlainMessage<'_>,
+        seq: u64,
+    ) -> Result<OutboundOpaqueMessage, Error> {
+        let mut payload =
+            PrefixedPayload::with_capacity(self.encrypted_payload_len(msg.payload.len()));
         let nonce = Nonce::new(&self.1, seq).0;
         let aad = make_tls12_aad(seq, msg.typ, msg.version, msg.payload.len());
         payload.extend_from_slice(&nonce[4..]);
         payload.extend_from_chunks(&msg.payload);
-        let tag = seal(&self.0, &nonce, &aad, &mut payload.as_mut()[GCM_EXPLICIT_NONCE_LEN..])?;
+        let tag = seal(
+            &self.0,
+            &nonce,
+            &aad,
+            &mut payload.as_mut()[GCM_EXPLICIT_NONCE_LEN..],
+        )?;
         payload.extend_from_slice(&tag);
         Ok(OutboundOpaqueMessage::new(msg.typ, msg.version, payload))
     }
@@ -232,7 +292,11 @@ impl<A: Cipher> MessageEncrypter for Tls12Gcm<A> {
 }
 
 impl<A: Cipher> MessageDecrypter for Tls12Gcm<A> {
-    fn decrypt<'a>(&mut self, mut msg: InboundOpaqueMessage<'a>, seq: u64) -> Result<InboundPlainMessage<'a>, Error> {
+    fn decrypt<'a>(
+        &mut self,
+        mut msg: InboundOpaqueMessage<'a>,
+        seq: u64,
+    ) -> Result<InboundPlainMessage<'a>, Error> {
         if msg.payload.len() < GCM_EXPLICIT_NONCE_LEN + TAG_LEN {
             return Err(Error::DecryptError);
         }
@@ -247,6 +311,10 @@ impl<A: Cipher> MessageDecrypter for Tls12Gcm<A> {
         if plain_len > MAX_FRAGMENT_LEN {
             return Err(Error::PeerSentOversizedRecord);
         }
-        Ok(msg.into_plain_message_range(GCM_EXPLICIT_NONCE_LEN..GCM_EXPLICIT_NONCE_LEN + plain_len))
+        Ok(
+            msg.into_plain_message_range(
+                GCM_EXPLICIT_NONCE_LEN..GCM_EXPLICIT_NONCE_LEN + plain_len,
+            ),
+        )
     }
 }

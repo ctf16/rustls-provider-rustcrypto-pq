@@ -18,7 +18,15 @@ fn key_exchange_agrees_with_aws_lc_rs() {
     use NamedGroup::*;
     assert_eq!(
         kx_agrees(&ours()),
-        [X25519MLKEM768, secp256r1MLKEM768, X25519, secp256r1, secp384r1, MLKEM768, MLKEM1024]
+        [
+            X25519MLKEM768,
+            secp256r1MLKEM768,
+            X25519,
+            secp256r1,
+            secp384r1,
+            MLKEM768,
+            MLKEM1024
+        ]
     );
 }
 
@@ -39,7 +47,11 @@ fn secp384r1mlkem1024_agrees_with_aws_lc_rs_components() {
 #[test]
 fn mlkem_rejects_altered_ciphertexts_implicitly() {
     let ours = ours();
-    for name in [NamedGroup::MLKEM512, NamedGroup::MLKEM768, NamedGroup::MLKEM1024] {
+    for name in [
+        NamedGroup::MLKEM512,
+        NamedGroup::MLKEM768,
+        NamedGroup::MLKEM1024,
+    ] {
         let g = group(&ours, name).unwrap();
         let client = g.start().unwrap();
         let server = g.start_and_complete(client.pub_key()).unwrap();
@@ -48,7 +60,11 @@ fn mlkem_rejects_altered_ciphertexts_implicitly() {
         ct[mid] ^= 1;
         let secret = client.complete(&ct).unwrap();
         assert_eq!(secret.secret_bytes().len(), 32);
-        assert_ne!(secret.secret_bytes(), server.secret.secret_bytes(), "{name:?}");
+        assert_ne!(
+            secret.secret_bytes(),
+            server.secret.secret_bytes(),
+            "{name:?}"
+        );
     }
 }
 
@@ -60,7 +76,10 @@ fn malformed_key_shares_are_refused() {
     let nist = 9 + 2 * 6;
     let mlkem = 9 + 2;
     let hybrids = (x25519 + 2) + 2 * (nist + 2);
-    assert_eq!(malformed_shares_refused(&ours()), hybrids + x25519 + 2 * nist + 3 * mlkem);
+    assert_eq!(
+        malformed_shares_refused(&ours()),
+        hybrids + x25519 + 2 * nist + 3 * mlkem
+    );
 }
 
 #[test]
@@ -92,7 +111,10 @@ fn handshakes() {
     // TLS 1.3: 7 certificate types x 3 suites x (9 groups with itself, 7
     // with aws-lc-rs each way); TLS 1.2: (3 ECDSA/Ed25519 certificate types
     // x 3 suites + RSA x 3 suites) x 3 groups, in each of the 3 pairs
-    assert_eq!(handshake_matrix(&ours()), 7 * 3 * (9 + 7 + 7) + (3 * 3 + 3) * 3 * 3);
+    assert_eq!(
+        handshake_matrix(&ours()),
+        7 * 3 * (9 + 7 + 7) + (3 * 3 + 3) * 3 * 3
+    );
 }
 
 #[test]
@@ -133,7 +155,10 @@ fn random_inputs_never_panic() {
 // ---- our ML-DSA private-key decoding ----
 
 fn public_key(file: &str) -> Vec<u8> {
-    let k = ours().key_provider.load_private_key(key(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+    let k = ours()
+        .key_provider
+        .load_private_key(key(file))
+        .unwrap_or_else(|e| panic!("{file}: {e}"));
     k.public_key().unwrap().as_ref().to_vec()
 }
 
@@ -166,10 +191,19 @@ fn mldsa_keys_sign_in_every_encoding() {
         ("mldsa87", rustls::SignatureScheme::ML_DSA_87),
     ] {
         let spki = spki(&format!("{kt}.spki.pem"));
-        for file in [format!("{kt}.key"), format!("{kt}.seed.key"), format!("{kt}.expanded.key")] {
+        for file in [
+            format!("{kt}.key"),
+            format!("{kt}.seed.key"),
+            format!("{kt}.expanded.key"),
+        ] {
             let k = ours.key_provider.load_private_key(key(&file)).unwrap();
-            let sig = k.choose_scheme(&[scheme]).unwrap().sign(b"message").unwrap();
-            verify(&reference(), scheme, &spki, b"message", &sig).unwrap_or_else(|_| panic!("{file}"));
+            let sig = k
+                .choose_scheme(&[scheme])
+                .unwrap()
+                .sign(b"message")
+                .unwrap();
+            verify(&reference(), scheme, &spki, b"message", &sig)
+                .unwrap_or_else(|_| panic!("{file}"));
         }
     }
 }
@@ -180,7 +214,9 @@ fn mldsa_keys_sign_in_every_encoding() {
 fn mldsa_seed_and_expanded_key_must_match() {
     let ours = ours();
     for (kt, expanded_len) in [("mldsa44", 2560), ("mldsa65", 4032), ("mldsa87", 4896)] {
-        let PrivateKeyDer::Pkcs8(both) = key(&format!("{kt}.key")) else { panic!() };
+        let PrivateKeyDer::Pkcs8(both) = key(&format!("{kt}.key")) else {
+            panic!()
+        };
         let der = both.secret_pkcs8_der().to_vec();
         // ... SEQUENCE { OCTET STRING seed (32), OCTET STRING expandedKey }: the
         // expandedKey ends the DER, after its 4-byte header and the seed
@@ -190,7 +226,9 @@ fn mldsa_seed_and_expanded_key_must_match() {
             let mut bad = der.clone();
             bad[at] ^= 1;
             assert!(
-                ours.key_provider.load_private_key(PrivateKeyDer::Pkcs8(bad.into())).is_err(),
+                ours.key_provider
+                    .load_private_key(PrivateKeyDer::Pkcs8(bad.into()))
+                    .is_err(),
                 "{kt}: loaded a key with its {what} altered"
             );
         }
@@ -203,11 +241,18 @@ fn mldsa_seed_and_expanded_key_must_match() {
 fn mldsa_expanded_key_out_of_range_is_refused() {
     let ours = ours();
     for (kt, expanded_len) in [("mldsa44", 2560), ("mldsa65", 4032), ("mldsa87", 4896)] {
-        let PrivateKeyDer::Pkcs8(k) = key(&format!("{kt}.expanded.key")) else { panic!() };
+        let PrivateKeyDer::Pkcs8(k) = key(&format!("{kt}.expanded.key")) else {
+            panic!()
+        };
         let mut der = k.secret_pkcs8_der().to_vec();
         // s1 starts after rho, K and tr (128 bytes); 0xff is 7 in 3 bits, 15 in 4
         let s1 = der.len() - expanded_len + 128;
         der[s1] = 0xff;
-        assert!(ours.key_provider.load_private_key(PrivateKeyDer::Pkcs8(der.into())).is_err(), "{kt}");
+        assert!(
+            ours.key_provider
+                .load_private_key(PrivateKeyDer::Pkcs8(der.into()))
+                .is_err(),
+            "{kt}"
+        );
     }
 }

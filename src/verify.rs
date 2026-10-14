@@ -10,7 +10,9 @@ use rsa::signature::hazmat::PrehashVerifier;
 use rsa::signature::Verifier;
 use rsa::traits::PublicKeyParts;
 use rustls::crypto::WebPkiSupportedAlgorithms;
-use rustls::pki_types::{alg_id, AlgorithmIdentifier, InvalidSignature, SignatureVerificationAlgorithm};
+use rustls::pki_types::{
+    alg_id, AlgorithmIdentifier, InvalidSignature, SignatureVerificationAlgorithm,
+};
 use rustls::SignatureScheme;
 use sha2::Digest;
 
@@ -37,8 +39,14 @@ pub static ALGORITHMS: WebPkiSupportedAlgorithms = WebPkiSupportedAlgorithms {
         (SignatureScheme::ML_DSA_87, &[ML_DSA_87]),
         (SignatureScheme::ML_DSA_65, &[ML_DSA_65]),
         (SignatureScheme::ML_DSA_44, &[ML_DSA_44]),
-        (SignatureScheme::ECDSA_NISTP384_SHA384, &[ECDSA_P384_SHA384, ECDSA_P256_SHA384]),
-        (SignatureScheme::ECDSA_NISTP256_SHA256, &[ECDSA_P256_SHA256, ECDSA_P384_SHA256]),
+        (
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            &[ECDSA_P384_SHA384, ECDSA_P256_SHA384],
+        ),
+        (
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            &[ECDSA_P256_SHA256, ECDSA_P384_SHA256],
+        ),
         (SignatureScheme::ED25519, &[ED25519]),
         (SignatureScheme::RSA_PSS_SHA512, &[RSA_PSS_SHA512]),
         (SignatureScheme::RSA_PSS_SHA384, &[RSA_PSS_SHA384]),
@@ -89,17 +97,26 @@ impl SignatureVerificationAlgorithm for Ecdsa {
         self.2
     }
 
-    fn verify_signature(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), InvalidSignature> {
+    fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
         let prehash = self.1.digest(message);
         let ok = match self.0 {
             Curve::P256 => {
-                let vk = p256::ecdsa::VerifyingKey::from_sec1_bytes(public_key).map_err(|_| InvalidSignature)?;
-                let sig = p256::ecdsa::Signature::from_der(signature).map_err(|_| InvalidSignature)?;
+                let vk = p256::ecdsa::VerifyingKey::from_sec1_bytes(public_key)
+                    .map_err(|_| InvalidSignature)?;
+                let sig =
+                    p256::ecdsa::Signature::from_der(signature).map_err(|_| InvalidSignature)?;
                 vk.verify_prehash(&prehash, &sig).is_ok()
             }
             Curve::P384 => {
-                let vk = p384::ecdsa::VerifyingKey::from_sec1_bytes(public_key).map_err(|_| InvalidSignature)?;
-                let sig = p384::ecdsa::Signature::from_der(signature).map_err(|_| InvalidSignature)?;
+                let vk = p384::ecdsa::VerifyingKey::from_sec1_bytes(public_key)
+                    .map_err(|_| InvalidSignature)?;
+                let sig =
+                    p384::ecdsa::Signature::from_der(signature).map_err(|_| InvalidSignature)?;
                 vk.verify_prehash(&prehash, &sig).is_ok()
             }
         };
@@ -107,12 +124,18 @@ impl SignatureVerificationAlgorithm for Ecdsa {
     }
 }
 
-static ECDSA_P256_SHA256: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P256, Hash::Sha256, alg_id::ECDSA_SHA256);
-static ECDSA_P256_SHA384: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P256, Hash::Sha384, alg_id::ECDSA_SHA384);
-static ECDSA_P256_SHA512: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P256, Hash::Sha512, alg_id::ECDSA_SHA512);
-static ECDSA_P384_SHA256: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P384, Hash::Sha256, alg_id::ECDSA_SHA256);
-static ECDSA_P384_SHA384: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P384, Hash::Sha384, alg_id::ECDSA_SHA384);
-static ECDSA_P384_SHA512: &dyn SignatureVerificationAlgorithm = &Ecdsa(Curve::P384, Hash::Sha512, alg_id::ECDSA_SHA512);
+static ECDSA_P256_SHA256: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P256, Hash::Sha256, alg_id::ECDSA_SHA256);
+static ECDSA_P256_SHA384: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P256, Hash::Sha384, alg_id::ECDSA_SHA384);
+static ECDSA_P256_SHA512: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P256, Hash::Sha512, alg_id::ECDSA_SHA512);
+static ECDSA_P384_SHA256: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P384, Hash::Sha256, alg_id::ECDSA_SHA256);
+static ECDSA_P384_SHA384: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P384, Hash::Sha384, alg_id::ECDSA_SHA384);
+static ECDSA_P384_SHA512: &dyn SignatureVerificationAlgorithm =
+    &Ecdsa(Curve::P384, Hash::Sha512, alg_id::ECDSA_SHA512);
 
 // ---- Ed25519 ----
 
@@ -128,11 +151,17 @@ impl SignatureVerificationAlgorithm for Ed25519 {
         alg_id::ED25519
     }
 
-    fn verify_signature(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), InvalidSignature> {
+    fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
         let pk: &[u8; 32] = public_key.try_into().map_err(|_| InvalidSignature)?;
         let vk = ed25519_dalek::VerifyingKey::from_bytes(pk).map_err(|_| InvalidSignature)?;
         let sig = ed25519_dalek::Signature::from_slice(signature).map_err(|_| InvalidSignature)?;
-        vk.verify_strict(message, &sig).map_err(|_| InvalidSignature)
+        vk.verify_strict(message, &sig)
+            .map_err(|_| InvalidSignature)
     }
 }
 
@@ -158,40 +187,63 @@ impl SignatureVerificationAlgorithm for Rsa {
         self.2
     }
 
-    fn verify_signature(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), InvalidSignature> {
+    fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
         let key = rsa::RsaPublicKey::from_pkcs1_der(public_key).map_err(|_| InvalidSignature)?;
         // as webpki's other backends: no RSA keys under 2048 bits
         if key.size() < 256 {
             return Err(InvalidSignature);
         }
-        let ok = match self.0 {
-            RsaPadding::Pkcs1 => {
-                let sig = rsa::pkcs1v15::Signature::try_from(signature).map_err(|_| InvalidSignature)?;
-                match self.1 {
-                    Hash::Sha256 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha256>::new(key).verify(message, &sig),
-                    Hash::Sha384 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha384>::new(key).verify(message, &sig),
-                    Hash::Sha512 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha512>::new(key).verify(message, &sig),
+        let ok =
+            match self.0 {
+                RsaPadding::Pkcs1 => {
+                    let sig = rsa::pkcs1v15::Signature::try_from(signature)
+                        .map_err(|_| InvalidSignature)?;
+                    match self.1 {
+                        Hash::Sha256 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha256>::new(key)
+                            .verify(message, &sig),
+                        Hash::Sha384 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha384>::new(key)
+                            .verify(message, &sig),
+                        Hash::Sha512 => rsa::pkcs1v15::VerifyingKey::<sha2::Sha512>::new(key)
+                            .verify(message, &sig),
+                    }
                 }
-            }
-            RsaPadding::Pss => {
-                let sig = rsa::pss::Signature::try_from(signature).map_err(|_| InvalidSignature)?;
-                match self.1 {
-                    Hash::Sha256 => rsa::pss::VerifyingKey::<sha2::Sha256>::new(key).verify(message, &sig),
-                    Hash::Sha384 => rsa::pss::VerifyingKey::<sha2::Sha384>::new(key).verify(message, &sig),
-                    Hash::Sha512 => rsa::pss::VerifyingKey::<sha2::Sha512>::new(key).verify(message, &sig),
+                RsaPadding::Pss => {
+                    let sig =
+                        rsa::pss::Signature::try_from(signature).map_err(|_| InvalidSignature)?;
+                    match self.1 {
+                        Hash::Sha256 => {
+                            rsa::pss::VerifyingKey::<sha2::Sha256>::new(key).verify(message, &sig)
+                        }
+                        Hash::Sha384 => {
+                            rsa::pss::VerifyingKey::<sha2::Sha384>::new(key).verify(message, &sig)
+                        }
+                        Hash::Sha512 => {
+                            rsa::pss::VerifyingKey::<sha2::Sha512>::new(key).verify(message, &sig)
+                        }
+                    }
                 }
-            }
-        };
+            };
         ok.map_err(|_| InvalidSignature)
     }
 }
 
-static RSA_PKCS1_SHA256: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pkcs1, Hash::Sha256, alg_id::RSA_PKCS1_SHA256);
-static RSA_PKCS1_SHA384: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pkcs1, Hash::Sha384, alg_id::RSA_PKCS1_SHA384);
-static RSA_PKCS1_SHA512: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pkcs1, Hash::Sha512, alg_id::RSA_PKCS1_SHA512);
-static RSA_PSS_SHA256: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pss, Hash::Sha256, alg_id::RSA_PSS_SHA256);
-static RSA_PSS_SHA384: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pss, Hash::Sha384, alg_id::RSA_PSS_SHA384);
-static RSA_PSS_SHA512: &dyn SignatureVerificationAlgorithm = &Rsa(RsaPadding::Pss, Hash::Sha512, alg_id::RSA_PSS_SHA512);
+static RSA_PKCS1_SHA256: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pkcs1, Hash::Sha256, alg_id::RSA_PKCS1_SHA256);
+static RSA_PKCS1_SHA384: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pkcs1, Hash::Sha384, alg_id::RSA_PKCS1_SHA384);
+static RSA_PKCS1_SHA512: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pkcs1, Hash::Sha512, alg_id::RSA_PKCS1_SHA512);
+static RSA_PSS_SHA256: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pss, Hash::Sha256, alg_id::RSA_PSS_SHA256);
+static RSA_PSS_SHA384: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pss, Hash::Sha384, alg_id::RSA_PSS_SHA384);
+static RSA_PSS_SHA512: &dyn SignatureVerificationAlgorithm =
+    &Rsa(RsaPadding::Pss, Hash::Sha512, alg_id::RSA_PSS_SHA512);
 
 // ---- ML-DSA (FIPS 204) ----
 
@@ -207,7 +259,12 @@ impl<P: MlDsaParams + 'static> SignatureVerificationAlgorithm for MlDsa<P> {
         self.0
     }
 
-    fn verify_signature(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), InvalidSignature> {
+    fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
         let pk = EncodedVerifyingKey::<P>::try_from(public_key).map_err(|_| InvalidSignature)?;
         let sig = EncodedSignature::<P>::try_from(signature).map_err(|_| InvalidSignature)?;
         let sig = ml_dsa::Signature::<P>::decode(&sig).ok_or(InvalidSignature)?;
@@ -218,6 +275,9 @@ impl<P: MlDsaParams + 'static> SignatureVerificationAlgorithm for MlDsa<P> {
     }
 }
 
-static ML_DSA_44: &dyn SignatureVerificationAlgorithm = &MlDsa::<ml_dsa::MlDsa44>(alg_id::ML_DSA_44, std::marker::PhantomData);
-static ML_DSA_65: &dyn SignatureVerificationAlgorithm = &MlDsa::<ml_dsa::MlDsa65>(alg_id::ML_DSA_65, std::marker::PhantomData);
-static ML_DSA_87: &dyn SignatureVerificationAlgorithm = &MlDsa::<ml_dsa::MlDsa87>(alg_id::ML_DSA_87, std::marker::PhantomData);
+static ML_DSA_44: &dyn SignatureVerificationAlgorithm =
+    &MlDsa::<ml_dsa::MlDsa44>(alg_id::ML_DSA_44, std::marker::PhantomData);
+static ML_DSA_65: &dyn SignatureVerificationAlgorithm =
+    &MlDsa::<ml_dsa::MlDsa65>(alg_id::ML_DSA_65, std::marker::PhantomData);
+static ML_DSA_87: &dyn SignatureVerificationAlgorithm =
+    &MlDsa::<ml_dsa::MlDsa87>(alg_id::ML_DSA_87, std::marker::PhantomData);

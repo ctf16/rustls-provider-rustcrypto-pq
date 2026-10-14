@@ -3,8 +3,8 @@
 //! hybrids built from them (crate::hybrid). ML-KEM and the hybrids are
 //! TLS 1.3 only.
 
-use ml_kem::{Decapsulate, Encapsulate, Generate, KeyExport, TryKeyInit};
 use crate::hybrid::Hybrid;
+use ml_kem::{Decapsulate, Encapsulate, Generate, KeyExport, TryKeyInit};
 use rustls::crypto::{ActiveKeyExchange, CompletedKeyExchange, SharedSecret, SupportedKxGroup};
 use rustls::{Error, NamedGroup, PeerMisbehaved, ProtocolVersion};
 
@@ -51,7 +51,9 @@ struct ActiveX25519 {
 impl ActiveKeyExchange for ActiveX25519 {
     fn complete(self: Box<Self>, peer: &[u8]) -> Result<SharedSecret, Error> {
         let peer: [u8; 32] = peer.try_into().map_err(|_| bad_share())?;
-        let shared = self.secret.diffie_hellman(&x25519_dalek::PublicKey::from(peer));
+        let shared = self
+            .secret
+            .diffie_hellman(&x25519_dalek::PublicKey::from(peer));
         // an all-zero secret: the peer sent a low-order point
         if !shared.was_contributory() {
             return Err(bad_share());
@@ -126,14 +128,20 @@ macro_rules! ml_kem {
 
         impl SupportedKxGroup for $name {
             fn start(&self) -> Result<Box<dyn ActiveKeyExchange>, Error> {
-                let dk = ml_kem::DecapsulationKey::<$params>::try_generate_from_rng(&mut getrandom::SysRng)
-                    .map_err(|_| Error::FailedToGetRandomBytes)?;
+                let dk = ml_kem::DecapsulationKey::<$params>::try_generate_from_rng(
+                    &mut getrandom::SysRng,
+                )
+                .map_err(|_| Error::FailedToGetRandomBytes)?;
                 let pub_key = dk.encapsulation_key().to_bytes().to_vec();
                 Ok(Box::new($active { dk, pub_key }))
             }
 
-            fn start_and_complete(&self, client_share: &[u8]) -> Result<CompletedKeyExchange, Error> {
-                let ek = ml_kem::EncapsulationKey::<$params>::new_from_slice(client_share).map_err(|_| bad_share())?;
+            fn start_and_complete(
+                &self,
+                client_share: &[u8],
+            ) -> Result<CompletedKeyExchange, Error> {
+                let ek = ml_kem::EncapsulationKey::<$params>::new_from_slice(client_share)
+                    .map_err(|_| bad_share())?;
                 let (ct, shared) = ek.encapsulate_with_rng(&mut rng());
                 Ok(CompletedKeyExchange {
                     group: $group,
@@ -158,7 +166,8 @@ macro_rules! ml_kem {
 
         impl ActiveKeyExchange for $active {
             fn complete(self: Box<Self>, ciphertext: &[u8]) -> Result<SharedSecret, Error> {
-                let ct = ml_kem::Ciphertext::<$params>::try_from(ciphertext).map_err(|_| bad_share())?;
+                let ct =
+                    ml_kem::Ciphertext::<$params>::try_from(ciphertext).map_err(|_| bad_share())?;
                 Ok(SharedSecret::from(&self.dk.decapsulate(&ct)[..]))
             }
 
@@ -173,9 +182,24 @@ macro_rules! ml_kem {
     };
 }
 
-ml_kem!(MlKem512, ActiveMlKem512, ml_kem::MlKem512, NamedGroup::MLKEM512);
-ml_kem!(MlKem768, ActiveMlKem768, ml_kem::MlKem768, NamedGroup::MLKEM768);
-ml_kem!(MlKem1024, ActiveMlKem1024, ml_kem::MlKem1024, NamedGroup::MLKEM1024);
+ml_kem!(
+    MlKem512,
+    ActiveMlKem512,
+    ml_kem::MlKem512,
+    NamedGroup::MLKEM512
+);
+ml_kem!(
+    MlKem768,
+    ActiveMlKem768,
+    ml_kem::MlKem768,
+    NamedGroup::MLKEM768
+);
+ml_kem!(
+    MlKem1024,
+    ActiveMlKem1024,
+    ml_kem::MlKem1024,
+    NamedGroup::MLKEM1024
+);
 
 static MLKEM512: MlKem512 = MlKem512;
 static MLKEM768: MlKem768 = MlKem768;
