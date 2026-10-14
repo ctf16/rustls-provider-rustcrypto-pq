@@ -1,0 +1,37 @@
+[package]
+name = "rustls-provider-rustcrypto-pq"
+version = "0.1.0"
+authors = ["Calvin Forinash <forinash@proton.me>"]
+edition = "2021"
+rust-version = "1.89"
+repository = "https://github.com/ctf16/rustls-provider-rustcrypto-pq"
+description = "A rustls crypto provider on the current RustCrypto crates, with post-quantum ML-KEM (FIPS 203) key exchange and ML-DSA (FIPS 204) signatures"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["rustls", "tls", "post-quantum", "ml-kem", "ml-dsa"]
+categories = ["cryptography", "network-programming"]
+include = ["/src", "/testdata/make.sh", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE"]
+
+# RustCrypto, one generation (rand_core 0.10, signature 3, pkcs8 0.11);
+# rsa 0.10 is still a release candidate, whose API changes between rcs
+[dependencies]
+rustls = { version = "0.23.45", default-features = false, features = ["std", "tls12"] }
+aes-gcm = "0.11.1"
+chacha20poly1305 = "0.11.0"
+sha2 = "0.11.0"
+hmac = "0.13.0"
+p256 = { version = "0.14.0", features = ["ecdh", "ecdsa", "pkcs8"] }
+p384 = { version = "0.14.0", features = ["ecdh", "ecdsa", "pkcs8"] }
+x25519-dalek = "3.0.0"
+ed25519-dalek = { version = "3.0.0", features = ["pkcs8"] }
+rsa = { version = "=0.10.0-rc.19", features = ["sha2"] }
+ml-kem = "0.3.2"
+ml-dsa = "0.1.1"
+pkcs8 = "0.11.0"
+signature = "3.0.0"
+rand_core = "0.10.1"
+getrandom = { version = "0.4.3", features = ["sys_rng"] }
+
+# the tests check the provider against rustls's aws-lc-rs provider
+[dev-dependencies]
+rustls = { version = "0.23.45", default-features = false, features = ["std", "tls12", "aws-lc-rs"] }
