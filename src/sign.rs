@@ -300,9 +300,26 @@ impl MlDsaKind {
 }
 
 struct MlDsa<P: MlDsaParams> {
-    key: Arc<ml_dsa::ExpandedSigningKey<P>>,
+    key: Arc<MlDsaKey<P>>,
     public: Vec<u8>,
     kind: MlDsaKind,
+}
+
+/// An ML-DSA-87 expanded key is about 100 KiB, and unoptimized builds copy it
+/// on every move, so it never moves by value here: the ml-dsa crate's
+/// SigningKey (from a seed) keeps it on the heap, an expandedKey is boxed.
+enum MlDsaKey<P: MlDsaParams> {
+    Seeded(ml_dsa::SigningKey<P>),
+    Expanded(Box<ml_dsa::ExpandedSigningKey<P>>),
+}
+
+impl<P: MlDsaParams> MlDsaKey<P> {
+    fn expanded(&self) -> &ml_dsa::ExpandedSigningKey<P> {
+        match self {
+            MlDsaKey::Seeded(k) => k.expanded_key(),
+            MlDsaKey::Expanded(k) => k,
+        }
+    }
 }
 
 /// one DER TLV at the start of B: (tag, contents, rest)
@@ -324,16 +341,16 @@ impl<P: MlDsaParams + 'static> MlDsa<P> {
     #[allow(deprecated)] // the expanded form has no non-deprecated decoder
     fn load(private_key: &[u8], kind: MlDsaKind) -> Result<Arc<dyn SigningKey>, Error> {
         let bad = |why: &str| Error::General(format!("ML-DSA private key: {why}"));
-        let from_seed = |seed: &[u8]| -> Result<ml_dsa::ExpandedSigningKey<P>, Error> {
+        let from_seed = |seed: &[u8]| -> Result<MlDsaKey<P>, Error> {
             let seed = ml_dsa::Seed::try_from(seed).map_err(|_| bad("seed is not 32 bytes"))?;
-            Ok(ml_dsa::SigningKey::<P>::from_seed(&seed).expanded_key().clone())
+            Ok(MlDsaKey::Seeded(ml_dsa::SigningKey::<P>::from_seed(&seed)))
         };
-        let from_expanded = |bytes: &[u8]| -> Result<ml_dsa::ExpandedSigningKey<P>, Error> {
+        let from_expanded = |bytes: &[u8]| -> Result<MlDsaKey<P>, Error> {
             let enc = ExpandedSigningKeyBytes::<P>::try_from(bytes).map_err(|_| bad("wrong expanded key length"))?;
             if !kind.expanded_in_range(bytes) {
                 return Err(bad("expanded key coefficients out of range"));
             }
-            Ok(ml_dsa::ExpandedSigningKey::<P>::from_expanded(&enc))
+            Ok(MlDsaKey::Expanded(Box::new(ml_dsa::ExpandedSigningKey::<P>::from_expanded(&enc))))
         };
         let (tag, contents, rest) = tlv(private_key).ok_or_else(|| bad("not DER"))?;
         if !rest.is_empty() {
@@ -350,14 +367,14 @@ impl<P: MlDsaParams + 'static> MlDsa<P> {
                 }
                 let key = from_seed(seed)?;
                 // the two halves must describe the same key
-                if key.to_expanded().as_slice() != expanded {
+                if key.expanded().to_expanded().as_slice() != expanded {
                     return Err(bad("seed and expandedKey don't match"));
                 }
                 key
             }
             _ => return Err(bad("unknown ML-DSA-PrivateKey form")),
         };
-        let public = key.verifying_key().encode().to_vec();
+        let public = key.expanded().verifying_key().encode().to_vec();
         Ok(Arc::new(MlDsa { key: Arc::new(key), public, kind }))
     }
 }
@@ -383,6 +400,7 @@ impl<P: MlDsaParams + 'static> Signer for MlDsa<P> {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
         let sig = self
             .key
+            .expanded()
             .sign_randomized(message, &[], &mut getrandom::SysRng)
             .map_err(sign_err)?;
         Ok(sig.encode().to_vec())
