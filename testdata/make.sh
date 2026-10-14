@@ -21,7 +21,7 @@ printf '%s\n' "subjectAltName=DNS:localhost" "basicConstraints=critical,CA:FALSE
 pair() { # NAME GENPKEY-ARGS...
   n=$1; shift
   "$O" genpkey "$@" -out "$n.ca.key"
-  "$O" req -new -x509 -key "$n.ca.key" -subj "/CN=rustls-provider-rustcrypto-pq test CA ($n)" -days 36500 \
+  "$O" req -new -x509 -key "$n.ca.key" -subj "/CN=rustls provider test CA ($n)" -days 36500 \
     -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign -out "$n.ca.pem"
   "$O" genpkey "$@" -out "$n.key"
   "$O" req -new -key "$n.key" -subj "/CN=localhost" -out "$n.csr"
