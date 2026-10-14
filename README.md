@@ -96,6 +96,10 @@ enable `aws-lc-rs` or `ring`.
 - `rsa` is pinned to a release candidate (`=0.10.0-rc.19`): rsa 0.10, the line on the same
   RustCrypto generation as the other crates, isn't released yet, and its API changes between
   release candidates. `ml-dsa` is at 0.1. Expect version bumps as they stabilize.
+- RSA private-key operations in `rsa` aren't constant-time ([RUSTSEC-2023-0071], the Marvin
+  attack; no fixed release). A TLS server, or a client with a client certificate, signing with
+  an RSA key may leak it to an attacker who can time its handshakes; prefer ML-DSA, ECDSA or
+  Ed25519 keys there. `cargo audit` reports this advisory for any project using this crate.
 - No security audit of this crate. Review it before relying on it.
 
 ## Tests
@@ -144,3 +148,4 @@ without any additional terms or conditions.
 [rustls-rustcrypto]: https://crates.io/crates/rustls-rustcrypto
 [draft-ietf-tls-ecdhe-mlkem]: https://datatracker.ietf.org/doc/draft-ietf-tls-ecdhe-mlkem/
 [draft-ietf-tls-mlkem]: https://datatracker.ietf.org/doc/draft-ietf-tls-mlkem/
+[RUSTSEC-2023-0071]: https://rustsec.org/advisories/RUSTSEC-2023-0071.html
