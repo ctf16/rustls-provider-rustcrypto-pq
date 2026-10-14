@@ -28,6 +28,10 @@ mod sign;
 mod suites;
 mod verify;
 
+#[cfg(test)]
+mod testkit;
+#[cfg(test)]
+mod tests;
 
 use rustls::crypto::{CryptoProvider, GetRandomFailed, SecureRandom};
 
